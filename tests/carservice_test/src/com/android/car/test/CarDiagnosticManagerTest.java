@@ -286,7 +286,7 @@ public class CarDiagnosticManagerTest extends MockedCarTestBase {
         Listener listener = new Listener();
         mCarDiagnosticManager.registerListener(
                 listener,
-                CarDiagnosticManager.FRAME_TYPE_FLAG_LIVE,
+                CarDiagnosticManager.FRAME_TYPE_LIVE,
                 android.car.hardware.CarSensorManager.SENSOR_RATE_NORMAL);
 
         listener.reset();
@@ -315,7 +315,7 @@ public class CarDiagnosticManagerTest extends MockedCarTestBase {
         Listener listener = new Listener();
         mCarDiagnosticManager.registerListener(
                 listener,
-                CarDiagnosticManager.FRAME_TYPE_FLAG_LIVE,
+                CarDiagnosticManager.FRAME_TYPE_LIVE,
                 android.car.hardware.CarSensorManager.SENSOR_RATE_NORMAL);
 
         getMockedVehicleHal().injectEvent(mLiveFrameEventBuilder.build());
@@ -354,7 +354,7 @@ public class CarDiagnosticManagerTest extends MockedCarTestBase {
         Listener listener = new Listener();
         mCarDiagnosticManager.registerListener(
                 listener,
-                CarDiagnosticManager.FRAME_TYPE_FLAG_LIVE,
+                CarDiagnosticManager.FRAME_TYPE_LIVE,
                 android.car.hardware.CarSensorManager.SENSOR_RATE_NORMAL);
 
         getMockedVehicleHal().injectEvent(mLiveFrameEventBuilder.build());
@@ -382,7 +382,7 @@ public class CarDiagnosticManagerTest extends MockedCarTestBase {
         Listener listener = new Listener();
         mCarDiagnosticManager.registerListener(
                 listener,
-                CarDiagnosticManager.FRAME_TYPE_FLAG_LIVE,
+                CarDiagnosticManager.FRAME_TYPE_LIVE,
                 android.car.hardware.CarSensorManager.SENSOR_RATE_NORMAL);
 
         mLiveFrameEventBuilder.addIntSensor(
@@ -416,7 +416,7 @@ public class CarDiagnosticManagerTest extends MockedCarTestBase {
         Listener listener = new Listener();
         mCarDiagnosticManager.registerListener(
                 listener,
-                CarDiagnosticManager.FRAME_TYPE_FLAG_LIVE,
+                CarDiagnosticManager.FRAME_TYPE_LIVE,
                 android.car.hardware.CarSensorManager.SENSOR_RATE_NORMAL);
 
         // cfr. CarDiagnosticEvent for the meaning of the several bits
@@ -518,7 +518,7 @@ public class CarDiagnosticManagerTest extends MockedCarTestBase {
         Listener listener = new Listener();
         mCarDiagnosticManager.registerListener(
                 listener,
-                CarDiagnosticManager.FRAME_TYPE_FLAG_LIVE,
+                CarDiagnosticManager.FRAME_TYPE_LIVE,
                 android.car.hardware.CarSensorManager.SENSOR_RATE_NORMAL);
 
         mLiveFrameEventBuilder.addIntSensor(
@@ -546,7 +546,7 @@ public class CarDiagnosticManagerTest extends MockedCarTestBase {
         Listener listener = new Listener();
         mCarDiagnosticManager.registerListener(
                 listener,
-                CarDiagnosticManager.FRAME_TYPE_FLAG_LIVE,
+                CarDiagnosticManager.FRAME_TYPE_LIVE,
                 android.car.hardware.CarSensorManager.SENSOR_RATE_NORMAL);
 
         mLiveFrameEventBuilder.addIntSensor(Obd2IntegerSensorIndex.ENGINE_OIL_TEMPERATURE, 74);
@@ -601,11 +601,11 @@ public class CarDiagnosticManagerTest extends MockedCarTestBase {
 
         mCarDiagnosticManager.registerListener(
                 listener1,
-                CarDiagnosticManager.FRAME_TYPE_FLAG_LIVE,
+                CarDiagnosticManager.FRAME_TYPE_LIVE,
                 android.car.hardware.CarSensorManager.SENSOR_RATE_NORMAL);
         mCarDiagnosticManager.registerListener(
                 listener2,
-                CarDiagnosticManager.FRAME_TYPE_FLAG_LIVE,
+                CarDiagnosticManager.FRAME_TYPE_LIVE,
                 android.car.hardware.CarSensorManager.SENSOR_RATE_NORMAL);
 
         listener1.reset();
@@ -668,7 +668,7 @@ public class CarDiagnosticManagerTest extends MockedCarTestBase {
         Listener listener = new Listener();
         mCarDiagnosticManager.registerListener(
                 listener,
-                CarDiagnosticManager.FRAME_TYPE_FLAG_FREEZE,
+                CarDiagnosticManager.FRAME_TYPE_FREEZE,
                 android.car.hardware.CarSensorManager.SENSOR_RATE_NORMAL);
 
         listener.reset();
@@ -711,7 +711,7 @@ public class CarDiagnosticManagerTest extends MockedCarTestBase {
         Listener listener = new Listener();
         mCarDiagnosticManager.registerListener(
                 listener,
-                CarDiagnosticManager.FRAME_TYPE_FLAG_FREEZE,
+                CarDiagnosticManager.FRAME_TYPE_FREEZE,
                 android.car.hardware.CarSensorManager.SENSOR_RATE_NORMAL);
 
         Set<Long> generatedTimestamps = new HashSet<>();
@@ -745,7 +745,7 @@ public class CarDiagnosticManagerTest extends MockedCarTestBase {
         Listener listener = new Listener();
         mCarDiagnosticManager.registerListener(
                 listener,
-                CarDiagnosticManager.FRAME_TYPE_FLAG_FREEZE,
+                CarDiagnosticManager.FRAME_TYPE_FREEZE,
                 android.car.hardware.CarSensorManager.SENSOR_RATE_NORMAL);
 
         VehiclePropValue injectedEvent =
@@ -756,6 +756,49 @@ public class CarDiagnosticManagerTest extends MockedCarTestBase {
         assertNotNull(mCarDiagnosticManager.getFreezeFrame(injectedEvent.timestamp));
         mCarDiagnosticManager.clearFreezeFrames(injectedEvent.timestamp);
         assertNull(mCarDiagnosticManager.getFreezeFrame(injectedEvent.timestamp));
+    }
+
+    public void testListenerUnregister() throws Exception {
+        if (!isFeatureEnabled()) {
+            Log.i(TAG, "skipping testListenerUnregister as diagnostics API is not enabled");
+            return;
+        }
+
+        Listener listener1 = new Listener();
+        Listener listener2 = new Listener();
+        mCarDiagnosticManager.registerListener(
+            listener1,
+            CarDiagnosticManager.FRAME_TYPE_LIVE,
+            android.car.hardware.CarSensorManager.SENSOR_RATE_NORMAL);
+        mCarDiagnosticManager.registerListener(
+            listener1,
+            CarDiagnosticManager.FRAME_TYPE_FREEZE,
+            android.car.hardware.CarSensorManager.SENSOR_RATE_NORMAL);
+
+        mCarDiagnosticManager.unregisterListener(listener1);
+
+        // you need a listener to be registered before MockedVehicleHal will actually dispatch
+        // your events - add one, but do it *after* unregistering the first listener
+        mCarDiagnosticManager.registerListener(
+            listener2,
+            CarDiagnosticManager.FRAME_TYPE_LIVE,
+            android.car.hardware.CarSensorManager.SENSOR_RATE_NORMAL);
+        mCarDiagnosticManager.registerListener(
+            listener2,
+            CarDiagnosticManager.FRAME_TYPE_FREEZE,
+            android.car.hardware.CarSensorManager.SENSOR_RATE_NORMAL);
+
+        VehiclePropValue injectedEvent =
+            mFreezeFrameProperties.addNewEvent(mFreezeFrameEventBuilder);
+        long time = injectedEvent.timestamp;
+        getMockedVehicleHal().injectEvent(injectedEvent);
+        assertFalse(listener1.waitForEvent(time));
+        assertTrue(listener2.waitForEvent(time));
+
+        time += 1000;
+        getMockedVehicleHal().injectEvent(mLiveFrameEventBuilder.build(time));
+        assertFalse(listener1.waitForEvent(time));
+        assertTrue(listener2.waitForEvent(time));
     }
 
     class Listener implements CarDiagnosticManager.OnDiagnosticEventListener {
