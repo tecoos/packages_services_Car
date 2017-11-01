@@ -26,7 +26,6 @@ PRODUCT_PACKAGES += \
     BasicDreams \
     CaptivePortalLogin \
     CertInstaller \
-    DeskClock \
     DocumentsUI \
     DownloadProviderUi \
     FusedLocation \
@@ -36,7 +35,6 @@ PRODUCT_PACKAGES += \
     LatinIME \
     Launcher2 \
     ManagedProvisioning \
-    PicoTts \
     PacProcessor \
     libpac \
     PrintSpooler \
@@ -63,6 +61,7 @@ PRODUCT_PACKAGES += \
     libstagefright_soft_amrwbenc \
     libstagefright_soft_avcdec \
     libstagefright_soft_avcenc \
+    libstagefright_soft_flacdec \
     libstagefright_soft_flacenc \
     libstagefright_soft_g711dec \
     libstagefright_soft_gsmdec \
@@ -81,7 +80,21 @@ PRODUCT_PACKAGES += \
     mdnsd \
     requestsync \
     wifi-service \
-    A2dpSinkService
+    A2dpSinkService \
+
+# EVS resources
+PRODUCT_PACKAGES += android.automotive.evs.manager@1.0
+PRODUCT_PACKAGES += evs_app
+# The following packages, or their vendor specific equivalents should be include in the device.mk
+#PRODUCT_PACKAGES += evs_app_default_resources
+#PRODUCT_PACKAGES += android.hardware.automotive.evs@1.0-service
+#PRODUCT_PACKAGES += android.hardware.automotive.evs@1.0-sample
+
+# Device running Android is a car
+PRODUCT_COPY_FILES += \
+    frameworks/native/data/etc/android.hardware.type.automotive.xml:system/etc/permissions/android.hardware.type.automotive.xml
+
+PRODUCT_PACKAGES += android.hardware.automotive.vehicle@2.1-service
 
 $(call inherit-product, $(SRC_TARGET_DIR)/product/core_minimal.mk)
 

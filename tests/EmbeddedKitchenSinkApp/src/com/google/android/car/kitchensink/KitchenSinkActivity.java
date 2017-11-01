@@ -16,94 +16,181 @@
 
 package com.google.android.car.kitchensink;
 
-import android.car.hardware.camera.CarCameraManager;
 import android.car.hardware.hvac.CarHvacManager;
-import android.content.ComponentName;
-import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.graphics.Color;
 import android.os.Bundle;
 import android.support.car.Car;
-import android.support.car.CarAppContextManager;
+import android.support.car.CarAppFocusManager;
+import android.support.car.CarConnectionCallback;
 import android.support.car.CarNotConnectedException;
-import android.support.car.CarNotSupportedException;
-import android.support.car.ServiceConnectionListener;
-import android.support.car.app.menu.CarDrawerActivity;
-import android.support.car.app.menu.CarMenu;
-import android.support.car.app.menu.CarMenuCallbacks;
-import android.support.car.app.menu.RootMenu;
-import android.support.car.hardware.CarSensorEvent;
 import android.support.car.hardware.CarSensorManager;
-import android.support.car.navigation.CarNavigationManager;
+import android.support.v4.app.Fragment;
 import android.util.Log;
+import android.view.HapticFeedbackConstants;
+import android.view.View;
+import android.widget.ImageView;
+import android.widget.Toast;
 
+import com.android.car.app.CarDrawerActivity;
+import com.android.car.app.CarDrawerAdapter;
+import com.android.car.app.DrawerItemViewHolder;
+import com.google.android.car.kitchensink.assistant.CarAssistantFragment;
 import com.google.android.car.kitchensink.audio.AudioTestFragment;
-import com.google.android.car.kitchensink.camera.CameraTestFragment;
+import com.google.android.car.kitchensink.bluetooth.BluetoothHeadsetFragment;
+import com.google.android.car.kitchensink.bluetooth.MapMceTestFragment;
 import com.google.android.car.kitchensink.cluster.InstrumentClusterFragment;
+import com.google.android.car.kitchensink.cube.CubesTestFragment;
+import com.google.android.car.kitchensink.diagnostic.DiagnosticTestFragment;
 import com.google.android.car.kitchensink.hvac.HvacTestFragment;
 import com.google.android.car.kitchensink.input.InputTestFragment;
 import com.google.android.car.kitchensink.job.JobSchedulerFragment;
-import com.google.android.car.kitchensink.keyboard.KeyboardFragment;
-
+import com.google.android.car.kitchensink.orientation.OrientationTestFragment;
+import com.google.android.car.kitchensink.radio.RadioTestFragment;
+import com.google.android.car.kitchensink.sensor.SensorsTestFragment;
+import com.google.android.car.kitchensink.setting.CarServiceSettingsActivity;
+import com.google.android.car.kitchensink.touch.TouchTestFragment;
+import com.google.android.car.kitchensink.volume.VolumeTestFragment;
 import java.util.ArrayList;
 import java.util.List;
 
 public class KitchenSinkActivity extends CarDrawerActivity {
     private static final String TAG = "KitchenSinkActivity";
 
-    private static final String MENU_AUDIO = "audio";
-    private static final String MENU_CAMERA = "camera";
-    private static final String MENU_HVAC = "hvac";
-    private static final String MENU_QUIT = "quit";
-    private static final String MENU_JOB = "job_scheduler";
-    private static final String MENU_KEYBOARD = "keyboard";
-    private static final String MENU_CLUSTER = "inst cluster";
-    private static final String MENU_INPUT_TEST = "input test";
+    private interface ClickHandler {
+        void onClick();
+    }
 
+    private static abstract class MenuEntry implements ClickHandler {
+        abstract String getText();
+    }
+
+    private final class OnClickMenuEntry extends MenuEntry {
+        private final String mText;
+        private final ClickHandler mClickHandler;
+
+        OnClickMenuEntry(String text, ClickHandler clickHandler) {
+            mText = text;
+            mClickHandler = clickHandler;
+        }
+
+        @Override
+        String getText() {
+            return mText;
+        }
+
+        @Override
+        public void onClick() {
+            mClickHandler.onClick();
+        }
+    }
+
+    private final class FragmentMenuEntry<T extends Fragment> extends MenuEntry {
+        private final class FragmentClassOrInstance<T extends Fragment> {
+            final Class<T> mClazz;
+            T mFragment = null;
+
+            FragmentClassOrInstance(Class<T> clazz) {
+                mClazz = clazz;
+            }
+
+            T getFragment() {
+                if (mFragment == null) {
+                    try {
+                        mFragment = mClazz.newInstance();
+                    } catch (InstantiationException | IllegalAccessException e) {
+                        Log.e(TAG, "unable to create fragment", e);
+                    }
+                }
+                return mFragment;
+            }
+        }
+
+        private final String mText;
+        private final FragmentClassOrInstance<T> mFragment;
+
+        FragmentMenuEntry(String text, Class<T> clazz) {
+            mText = text;
+            mFragment = new FragmentClassOrInstance<>(clazz);
+        }
+
+        @Override
+        String getText() {
+            return mText;
+        }
+
+        @Override
+        public void onClick() {
+            Fragment fragment = mFragment.getFragment();
+            if (fragment != null) {
+                KitchenSinkActivity.this.showFragment(fragment);
+            } else {
+                Log.e(TAG, "cannot show fragment for " + getText());
+            }
+        }
+    }
+
+    private final List<MenuEntry> mMenuEntries = new ArrayList<MenuEntry>() {
+        {
+            add("audio", AudioTestFragment.class);
+            add("hvac", HvacTestFragment.class);
+            add("job scheduler", JobSchedulerFragment.class);
+            add("inst cluster", InstrumentClusterFragment.class);
+            add("input test", InputTestFragment.class);
+            add("radio", RadioTestFragment.class);
+            add("assistant", CarAssistantFragment.class);
+            add("sensors", SensorsTestFragment.class);
+            add("diagnostic", DiagnosticTestFragment.class);
+            add("volume test", VolumeTestFragment.class);
+            add("touch test", TouchTestFragment.class);
+            add("cubes test", CubesTestFragment.class);
+            add("orientation test", OrientationTestFragment.class);
+            add("bluetooth headset",BluetoothHeadsetFragment.class);
+            add("bluetooth messaging test", MapMceTestFragment.class);
+            add("car service settings", () -> {
+                Intent intent = new Intent(KitchenSinkActivity.this,
+                    CarServiceSettingsActivity.class);
+                startActivity(intent);
+            });
+            add("quit", KitchenSinkActivity.this::finish);
+        }
+
+        <T extends Fragment> void add(String text, Class<T> clazz) {
+            add(new FragmentMenuEntry(text, clazz));
+        }
+        void add(String text, ClickHandler onClick) {
+            add(new OnClickMenuEntry(text, onClick));
+        }
+    };
     private Car mCarApi;
-    private CarCameraManager mCameraManager;
     private CarHvacManager mHvacManager;
     private CarSensorManager mCarSensorManager;
-    private CarNavigationManager mCarNavigationManager;
-    private CarAppContextManager mCarAppContextManager;
+    private CarAppFocusManager mCarAppFocusManager;
 
-
-    private AudioTestFragment mAudioTestFragment;
-    private CameraTestFragment mCameraTestFragment;
-    private HvacTestFragment mHvacTestFragment;
-    private JobSchedulerFragment mJobFragment;
-    private KeyboardFragment mKeyboardFragment;
-    private InstrumentClusterFragment mInstrumentClusterFragment;
-    private InputTestFragment mInputTestFragment;
-
-    private final CarSensorManager.CarSensorEventListener mListener =
-            new CarSensorManager.CarSensorEventListener() {
-        @Override
-        public void onSensorChanged(CarSensorEvent event) {
-            switch (event.sensorType) {
-                case CarSensorManager.SENSOR_TYPE_DRIVING_STATUS:
-                    Log.d(TAG, "driving status:" + event.intValues[0]);
-                    break;
-            }
+    private final CarSensorManager.OnSensorChangedListener mListener = (manager, event) -> {
+        switch (event.sensorType) {
+            case CarSensorManager.SENSOR_TYPE_DRIVING_STATUS:
+                Log.d(TAG, "driving status:" + event.intValues[0]);
+                break;
         }
     };
 
-    public KitchenSinkActivity(Proxy proxy, Context context, Car car) {
-        super(proxy, context, car);
+    public CarHvacManager getHvacManager() {
+        return mHvacManager;
+    }
+
+    @Override
+    protected CarDrawerAdapter getRootAdapter() {
+        return new DrawerAdapter();
     }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        resetTitle();
-        setScrimColor(Color.LTGRAY);
-        setLightMode();
-        setCarMenuCallbacks(new MyCarMenuCallbacks());
-        setContentView(R.layout.kitchen_sink_activity);
-
+        setMainContent(R.layout.kitchen_content);
         // Connection to Car Service does not work for non-automotive yet.
-        if (getContext().getPackageManager().hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE)) {
-            mCarApi = Car.createCar(getContext(), mServiceConnectionListener);
+        if (getPackageManager().hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE)) {
+            mCarApi = Car.createCar(this, mCarConnectionCallback);
             mCarApi.connect();
         }
         Log.i(TAG, "onCreate");
@@ -143,11 +230,7 @@ public class KitchenSinkActivity extends CarDrawerActivity {
     protected void onDestroy() {
         super.onDestroy();
         if (mCarSensorManager != null) {
-            try {
-                mCarSensorManager.unregisterListener(mListener);
-            } catch (CarNotConnectedException e) {
-                Log.e(TAG, "Failed to unregister car seonsor listener", e);
-            }
+            mCarSensorManager.removeListener(mListener);
         }
         if (mCarApi != null) {
             mCarApi.disconnect();
@@ -155,130 +238,67 @@ public class KitchenSinkActivity extends CarDrawerActivity {
         Log.i(TAG, "onDestroy");
     }
 
-    private void resetTitle() {
-        setTitle(getContext().getString(R.string.app_title));
+    private void showFragment(Fragment fragment) {
+        getSupportFragmentManager().beginTransaction()
+                .replace(R.id.kitchen_content, fragment)
+                .commit();
     }
 
-    private final ServiceConnectionListener mServiceConnectionListener =
-            new ServiceConnectionListener() {
+    private final CarConnectionCallback mCarConnectionCallback =
+            new CarConnectionCallback() {
         @Override
-        public void onServiceConnected(ComponentName name) {
+        public void onConnected(Car car) {
             Log.d(TAG, "Connected to Car Service");
             try {
-                mCameraManager = (CarCameraManager) mCarApi.getCarManager(android.car.Car
-                        .CAMERA_SERVICE);
                 mHvacManager = (CarHvacManager) mCarApi.getCarManager(android.car.Car.HVAC_SERVICE);
-                mCarNavigationManager = (CarNavigationManager) mCarApi.getCarManager(
-                        android.car.Car.CAR_NAVIGATION_SERVICE);
                 mCarSensorManager = (CarSensorManager) mCarApi.getCarManager(Car.SENSOR_SERVICE);
-                mCarSensorManager.registerListener(mListener,
+                mCarSensorManager.addListener(mListener,
                         CarSensorManager.SENSOR_TYPE_DRIVING_STATUS,
                         CarSensorManager.SENSOR_RATE_NORMAL);
-                mCarAppContextManager =
-                        (CarAppContextManager) mCarApi.getCarManager(Car.APP_CONTEXT_SERVICE);
+                mCarAppFocusManager =
+                        (CarAppFocusManager) mCarApi.getCarManager(Car.APP_FOCUS_SERVICE);
             } catch (CarNotConnectedException e) {
                 Log.e(TAG, "Car is not connected!", e);
-            } catch (CarNotSupportedException e) {
-                Log.e(TAG, "Car is not supported!", e);
             }
         }
 
         @Override
-        public void onServiceDisconnected(ComponentName name) {
+        public void onDisconnected(Car car) {
             Log.d(TAG, "Disconnect from Car Service");
-        }
-
-        @Override
-        public void onServiceSuspended(int cause) {
-            Log.d(TAG, "Car Service connection suspended");
-        }
-
-        @Override
-        public void onServiceConnectionFailed(int cause) {
-            Log.d(TAG, "Car Service connection failed");
         }
     };
 
-    private final class MyCarMenuCallbacks extends CarMenuCallbacks {
-        /** Id for the root menu */
-        private static final String ROOT = "ROOT";
+    public Car getCar() {
+        return mCarApi;
+    }
 
-        @Override
-        public RootMenu onGetRoot(Bundle hints) {
-            return new RootMenu(ROOT);
+    private final class DrawerAdapter extends CarDrawerAdapter {
+
+        public DrawerAdapter() {
+            super(KitchenSinkActivity.this, true /* showDisabledOnListOnEmpty */);
+            setTitle(getString(R.string.app_title));
         }
 
         @Override
-        public void onLoadChildren(String parentId, CarMenu result) {
-            List<CarMenu.Item> items = new ArrayList<>();
-            if (parentId.equals(ROOT)) {
-                String[] allMenus = {
-                        MENU_AUDIO, MENU_CAMERA, MENU_HVAC, MENU_JOB, MENU_KEYBOARD, MENU_CLUSTER,
-                        MENU_INPUT_TEST, MENU_QUIT
-                };
-                for (String menu : allMenus) {
-                    items.add(new CarMenu.Builder(menu).setText(menu).build());
-                }
+        protected int getActualItemCount() {
+            return mMenuEntries.size();
+        }
+
+        @Override
+        protected void populateViewHolder(DrawerItemViewHolder holder, int position) {
+            holder.getTitle().setText(mMenuEntries.get(position).getText());
+        }
+
+        @Override
+        public void onItemClick(int position) {
+            if ((position < 0) || (position >= mMenuEntries.size())) {
+                Log.wtf(TAG, "Unknown menu item: " + position);
+                return;
             }
-            result.sendResult(items);
-        }
 
-        @Override
-        public void onItemClicked(String id) {
-            Log.d(TAG, "onItemClicked id=" + id);
-            if (id.equals(MENU_AUDIO)) {
-                if (mAudioTestFragment == null) {
-                    mAudioTestFragment = new AudioTestFragment();
-                }
-                setContentFragment(mAudioTestFragment);
-            } else if (id.equals(MENU_CAMERA)) {
-                if (mCameraManager != null) {
-                    if (mCameraTestFragment == null) {
-                        mCameraTestFragment = new CameraTestFragment();
-                        mCameraTestFragment.setCameraManager(mCameraManager);
-                    }
-                    // Don't allow camera fragment to start if we don't have a manager.
-                    setContentFragment(mCameraTestFragment);
-                }
-            } else if (id.equals(MENU_HVAC)) {
-                if (mHvacManager != null) {
-                    if (mHvacTestFragment == null) {
-                        mHvacTestFragment = new HvacTestFragment();
-                        mHvacTestFragment.setHvacManager(mHvacManager);
-                    }
-                    // Don't allow HVAC fragment to start if we don't have a manager.
-                    setContentFragment(mHvacTestFragment);
-                }
-            } else if (id.equals(MENU_JOB)) {
-                if (mJobFragment == null) {
-                    mJobFragment = new JobSchedulerFragment();
-                }
-                setContentFragment(mJobFragment);
-            } else if (id.equals(MENU_KEYBOARD)) {
-                if (mKeyboardFragment == null) {
-                    mKeyboardFragment = new KeyboardFragment();
-                }
-                setContentFragment(mKeyboardFragment);
-            } else if (id.equals(MENU_CLUSTER)) {
-                if (mInstrumentClusterFragment == null) {
-                    mInstrumentClusterFragment = new InstrumentClusterFragment();
-                    mInstrumentClusterFragment.setCarNavigationManager(mCarNavigationManager);
-                    mInstrumentClusterFragment.setCarAppContextManager(mCarAppContextManager);
-                }
-                setContentFragment(mInstrumentClusterFragment);
-            } else if (id.equals(MENU_INPUT_TEST)) {
-                if (mInputTestFragment == null) {
-                    mInputTestFragment = new InputTestFragment();
-                }
-                setContentFragment(mInputTestFragment);
-            } else if (id.equals(MENU_QUIT)) {
-                finish();
-            }
-        }
+            mMenuEntries.get(position).onClick();
 
-        @Override
-        public void onCarMenuClosed() {
-            resetTitle();
+            closeDrawer();
         }
     }
 }
