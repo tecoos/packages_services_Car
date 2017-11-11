@@ -33,8 +33,6 @@ namespace android {
 #define PID_IO_FILE "/proc/%d/io"
 #define PROC_DIR "/proc"
 
-static const int PROC_NAME_LEN = 64;
-static const int THREAD_NAME_LEN = 32;
 static const int MAX_LINE = 256;
 
 #define die(...) { LOG(ERROR) << (__VA_ARGS__); exit(EXIT_FAILURE); }
@@ -277,8 +275,11 @@ void PrintPids(DataContainer& data, std::unordered_map<int, uint64_t>& cpuDataMa
             stats.rbytes += (newerSample->readbytes() - olderSample->readbytes());
             stats.wbytes += (newerSample->writebytes() - olderSample->writebytes());
 
-            printf("%5" PRId64 " - %-5" PRId64 "  %-13" PRId64 "%-13" PRId64 "%-13" PRId64 "%-13" PRId64 "%-13"
-                   PRId64 "%-13" PRId64 "%-9.2f\n",
+            // Note that all of these are explicitly `long long`s, not int64_t,
+            // so we can't use PRId64 here.
+#define NUMBER "%-13lld"
+            printf("%5lld - %-5lld  " NUMBER NUMBER NUMBER NUMBER NUMBER NUMBER "%-9.2f\n",
+#undef NUMBER
                    olderSample->uptime(),
                    newerSample->uptime(),
                    newerSample->rchar() - olderSample->rchar(),
@@ -291,7 +292,9 @@ void PrintPids(DataContainer& data, std::unordered_map<int, uint64_t>& cpuDataMa
             isFirstSample = false;
         }
         printf("-----------------------------------------------------------------------------\n");
-        printf("%-15s%-13" PRId64 "%-13" PRId64 "%-13" PRId64 "%-13" PRId64 "%-13" PRId64 "%-13" PRId64 "\n",
+#define NUMBER "%-13lld"
+        printf("%-15s" NUMBER NUMBER NUMBER NUMBER NUMBER NUMBER "\n",
+#undef NUMBER
                "Total",
                newerSample->rchar(),
                newerSample->wchar(),
